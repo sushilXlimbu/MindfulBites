@@ -1,0 +1,14 @@
+@FoodJournalApp_HostAddress = http://localhost:5156
+
+GET {{FoodJournalApp_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
+
+# Active nudges for the dashboard. Paste a token from POST /api/auth/login.
+@token = paste-jwt-here
+GET {{FoodJournalApp_HostAddress}}/api/nudges
+Authorization: Bearer {{token}}
+Accept: application/json
+
+###

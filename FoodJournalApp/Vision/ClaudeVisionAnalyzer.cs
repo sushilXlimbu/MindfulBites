@@ -2,6 +2,7 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using FoodJournalApp.Security;
 
 namespace FoodJournalApp.Vision;
 
@@ -27,8 +28,7 @@ public class ClaudeVisionAnalyzer : IVisionAnalyzer
     public ClaudeVisionAnalyzer(HttpClient http, IConfiguration config)
     {
         _http = http;
-        _apiKey = config["Anthropic:ApiKey"]
-                  ?? throw new InvalidOperationException("Anthropic:ApiKey is not configured.");
+        _apiKey = SecretConfig.Require(config, "Anthropic:ApiKey");
     }
 
     public async Task<MealAnalysis> AnalyzeAsync(

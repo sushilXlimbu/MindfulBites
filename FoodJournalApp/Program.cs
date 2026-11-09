@@ -14,9 +14,11 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 
-// SQL Server LocalDB via EF Core.
+// SQL Server via EF Core. Connection string comes from user-secrets / env var
+// (ConnectionStrings__Default), not from appsettings.json.
+var connectionString = SecretConfig.Require(builder.Configuration, "ConnectionStrings:Default");
 builder.Services.AddDbContext<AppDbContext>(opt =>
-    opt.UseSqlServer(builder.Configuration.GetConnectionString("Default")));
+    opt.UseSqlServer(connectionString));
 
 // Identity, EF Core-backed, no cookie/UI pieces — this is a JWT-only API.
 builder.Services.AddIdentityCore<ApplicationUser>(opt =>
@@ -28,8 +30,7 @@ builder.Services.AddIdentityCore<ApplicationUser>(opt =>
     .AddDefaultTokenProviders();
 
 var jwtSection = builder.Configuration.GetSection("Jwt");
-var jwtKey = jwtSection["Key"]
-             ?? throw new InvalidOperationException("Jwt:Key is not configured (set it via user-secrets).");
+var jwtKey = SecretConfig.Require(builder.Configuration, "Jwt:Key");
 var jwtIssuer = jwtSection["Issuer"]!;
 var jwtAudience = jwtSection["Audience"]!;
 var jwtExpiryMinutes = int.Parse(jwtSection["ExpiryMinutes"] ?? "60");

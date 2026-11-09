@@ -480,3 +480,36 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# ---------------------------------------------------------------
+# FoodJournalApp: secrets, local env, user uploads
+# ---------------------------------------------------------------
+
+# Local-only config overrides that may hold real secrets
+# (appsettings.json itself stays tracked; it holds placeholders only)
+appsettings.Local.json
+appsettings.*.Local.json
+appsettings.Production.json
+secrets.json
+*.pfx
+*.pem
+*.key
+
+# Local env files (keep a committed .env.example if you add one)
+.env
+.env.*
+!.env.example
+*.env.local
+
+# User-uploaded meal photos (served from wwwroot/uploads at runtime)
+**/wwwroot/uploads/*
+!**/wwwroot/uploads/.gitkeep
+
+# Node / frontend build artifacts
+node_modules/
+dist/
+build/
+.vite/
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*

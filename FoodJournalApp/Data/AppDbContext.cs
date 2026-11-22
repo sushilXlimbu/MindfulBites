@@ -16,6 +16,16 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
     public DbSet<FoodItem> FoodItems => Set<FoodItem>();
     public DbSet<DailySummary> DailySummaries => Set<DailySummary>();
 
+    // Postgres "timestamp with time zone" only accepts DateTime values with Kind=Utc;
+    // Npgsql throws on Unspecified/Local. Every DateTime in this app is meant to be UTC,
+    // so this converter is a safety net: it normalizes on write (and for query parameters
+    // compared against these columns) and marks values read back as Utc.
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        // Also covers DateTime? properties.
+        configurationBuilder.Properties<DateTime>().HaveConversion<UtcDateTimeConverter>();
+    }
+
     protected override void OnModelCreating(ModelBuilder b)
     {
         base.OnModelCreating(b); // must run first: sets up the Identity tables

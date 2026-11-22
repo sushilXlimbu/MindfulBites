@@ -4,6 +4,7 @@ using FoodJournalApp.Domain;
 using FoodJournalApp.Rules;
 using FoodJournalApp.Rules.Rules;
 using FoodJournalApp.Security;
+using FoodJournalApp.Storage;
 using FoodJournalApp.Vision;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
@@ -14,11 +15,12 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 
-// SQL Server via EF Core. Connection string comes from user-secrets / env var
-// (ConnectionStrings__Default), not from appsettings.json.
-var connectionString = SecretConfig.Require(builder.Configuration, "ConnectionStrings:Default");
+// PostgreSQL via EF Core (Npgsql). Connection string comes from DATABASE_URL or
+// ConnectionStrings:Default (user-secrets locally, env vars when deployed), never
+// from appsettings.json. Accepts key-value or postgres:// URI form.
+var connectionString = PostgresConnectionString.Resolve(builder.Configuration);
 builder.Services.AddDbContext<AppDbContext>(opt =>
-    opt.UseSqlServer(connectionString));
+    opt.UseNpgsql(connectionString));
 
 // Identity, EF Core-backed, no cookie/UI pieces — this is a JWT-only API.
 builder.Services.AddIdentityCore<ApplicationUser>(opt =>
@@ -63,6 +65,10 @@ builder.Services.AddAuthorization();
 // The vision seam. HttpClient is pooled by the factory. Swap this one line to change provider.
 builder.Services.AddHttpClient<IVisionAnalyzer, ClaudeVisionAnalyzer>();
 
+// The photo storage seam. PhotoStorage:Provider = "R2" (default) or "Local".
+// R2 settings are validated here so a bad deploy fails at startup, not on first upload.
+builder.Services.AddPhotoStorage(builder.Configuration);
+
 // Rules engine + every rule. Register new rules here; the engine picks them all up.
 builder.Services.AddScoped<INudgeRule, FriedFoodFrequencyRule>();
 builder.Services.AddScoped<INudgeRule, LateNightEatingRule>();
@@ -78,7 +84,9 @@ builder.Services.AddCors(o => o.AddPolicy("dev", p => p
 var app = builder.Build();
 
 app.UseCors("dev");
-app.UseStaticFiles(); // serves wwwroot/uploads/* (meal photos) — public, no auth needed for <img> tags
+// Serves wwwroot/uploads/* for LocalPhotoStorage and for legacy "/uploads/..." photo URLs.
+// R2 photos are served by Cloudflare directly and never touch this.
+app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();

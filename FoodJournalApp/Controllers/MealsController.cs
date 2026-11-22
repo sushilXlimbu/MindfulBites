@@ -5,6 +5,7 @@ using FoodJournalApp.Data;
 using FoodJournalApp.Domain;
 using FoodJournalApp.Dtos;
 using FoodJournalApp.Rules;
+using FoodJournalApp.Storage;
 using FoodJournalApp.Vision;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -30,14 +31,14 @@ public class MealsController : ControllerBase
     private readonly AppDbContext _db;
     private readonly IVisionAnalyzer _vision;   // depends on the SEAM, not on Claude
     private readonly NudgeEvaluator _nudges;
-    private readonly IWebHostEnvironment _env;
+    private readonly IPhotoStorage _photos;     // depends on the SEAM, not on disk or R2
 
-    public MealsController(AppDbContext db, IVisionAnalyzer vision, NudgeEvaluator nudges, IWebHostEnvironment env)
+    public MealsController(AppDbContext db, IVisionAnalyzer vision, NudgeEvaluator nudges, IPhotoStorage photos)
     {
         _db = db;
         _vision = vision;
         _nudges = nudges;
-        _env = env;
+        _photos = photos;
     }
 
     // Pulls the authenticated user's ID out of the JWT. The "sub" claim issued by
@@ -115,17 +116,13 @@ public class MealsController : ControllerBase
         if (!analysis.IsFood)
             return UnprocessableEntity("That photo doesn't look like food — try another shot.");
 
-        // Only save to disk once we know it's a real food photo — no orphaned files
-        // for rejected uploads.
-        var fileName = $"{Guid.NewGuid()}{extension}";
-        var uploadsDir = Path.Combine(_env.WebRootPath, "uploads");
-        Directory.CreateDirectory(uploadsDir);
-        await using (var fileStream = new FileStream(Path.Combine(uploadsDir, fileName), FileMode.Create))
+        // Only store the photo once we know it's a real food photo, so there are no
+        // orphaned files for rejected uploads. Local disk or R2, per Program.cs.
+        string photoUrl;
+        await using (var stream = photo.OpenReadStream())
         {
-            await photo.CopyToAsync(fileStream, ct);
+            photoUrl = await _photos.SaveAsync(stream, photo.ContentType, extension, ct);
         }
-
-        var photoUrl = $"/uploads/{fileName}"; // relative — frontend prepends the API origin
 
         // 2) OUR code does the arithmetic. Never ask the model to add up the plate.
         var items = analysis.Items.Select(i => new FoodItem
@@ -194,7 +191,8 @@ public class MealsController : ControllerBase
                     DateTimeStyles.None, out var day))
                 return BadRequest("date must be in yyyy-MM-dd format.");
 
-            rangeStart = day.ToDateTime(TimeOnly.MinValue);
+            // Explicit Utc: Postgres timestamptz rejects Kind=Unspecified parameters.
+            rangeStart = day.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
             rangeEndExclusive = rangeStart.AddDays(1);
         }
         else

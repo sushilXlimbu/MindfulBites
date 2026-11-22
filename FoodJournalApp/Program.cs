@@ -92,6 +92,8 @@ builder.Services.AddCors(o => o.AddPolicy("dev", p => p
 
 var app = builder.Build();
 
+await ApplyMigrationsAsync(app);
+
 app.UseCors("dev");
 // Serves wwwroot/uploads/* for LocalPhotoStorage and for legacy "/uploads/..." photo URLs.
 // R2 photos are served by Cloudflare directly and never touch this.
@@ -101,3 +103,50 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+// Applies pending EF Core migrations on startup. Migrate() only applies migrations that
+// haven't run yet; it never drops or recreates anything. A freshly started database (e.g.
+// Railway cold start) can refuse connections briefly, so transient errors are retried.
+// If it still fails, the exception is rethrown so the app stops instead of serving
+// requests against a missing schema, and the platform restarts it.
+static async Task ApplyMigrationsAsync(WebApplication app)
+{
+    const int maxAttempts = 5;
+    var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("DatabaseMigrations");
+
+    for (var attempt = 1; ; attempt++)
+    {
+        try
+        {
+            using var scope = app.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+            var pending = (await db.Database.GetPendingMigrationsAsync()).ToList();
+            if (pending.Count == 0)
+            {
+                logger.LogInformation("Database schema is up to date. No migrations to apply.");
+                return;
+            }
+
+            logger.LogInformation("Applying {Count} pending migration(s): {Migrations}",
+                pending.Count, string.Join(", ", pending));
+            await db.Database.MigrateAsync();
+            logger.LogInformation("Database migrations applied successfully.");
+            return;
+        }
+        catch (Exception ex) when (attempt < maxAttempts &&
+                                   ex is Npgsql.NpgsqlException { IsTransient: true } or TimeoutException)
+        {
+            var delay = TimeSpan.FromSeconds(attempt * 2);
+            logger.LogWarning(ex,
+                "Database not reachable yet (attempt {Attempt}/{Max}). Retrying in {Delay}s.",
+                attempt, maxAttempts, delay.TotalSeconds);
+            await Task.Delay(delay);
+        }
+        catch (Exception ex)
+        {
+            logger.LogCritical(ex, "Applying database migrations failed. The app will stop.");
+            throw;
+        }
+    }
+}

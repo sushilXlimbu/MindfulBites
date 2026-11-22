@@ -1,0 +1,43 @@
+# Build output
+**/bin/
+**/obj/
+**/out/
+**/publish/
+
+# IDE and tooling
+**/.vs/
+**/.vscode/
+**/.idea/
+**/*.user
+**/*.suo
+**/*.rsuser
+.claude/
+
+# Source control
+.git/
+.gitignore
+.gitattributes
+
+# Secrets and local config
+**/.env
+**/.env.*
+**/secrets.json
+**/appsettings.Development.json
+**/appsettings.*.local.json
+**/Properties/launchSettings.json
+
+# Local uploads and front-end dependencies
+**/wwwroot/uploads/
+**/node_modules/
+
+# Docker and docs
+**/Dockerfile*
+**/.dockerignore
+**/docker-compose*
+README.md
+**/*.md
+
+# Misc
+**/*.http
+**/TestResults/
+**/*.log

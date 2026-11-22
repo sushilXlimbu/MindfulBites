@@ -13,6 +13,15 @@ using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Hosting platforms like Railway assign the port via a PORT env var. Bind to all
+// interfaces on it so the platform's proxy can reach the container. Locally, PORT is
+// unset and launchSettings.json / ASPNETCORE_URLS apply as usual.
+var port = Environment.GetEnvironmentVariable("PORT");
+if (!string.IsNullOrWhiteSpace(port))
+{
+    builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+}
+
 builder.Services.AddControllers();
 
 // PostgreSQL via EF Core (Npgsql). Connection string comes from DATABASE_URL or
